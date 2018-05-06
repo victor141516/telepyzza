@@ -77,6 +77,42 @@ def start_interpreter(message):
     t.start()
 
 
+@bot.message_handler(commands=['pip'])
+def pip_manage(message):
+    max_message_size = 4096
+    container_name = f'{DOCKER_CONTAINER_NAME_PREFIX}{message.from_user.id}'
+    available_pip_commands_with_packages = ['install', 'uninstall']
+    available_pip_commands_without_packages = ['list']
+    raw_command = message.text.split()[1:]
+
+    action = raw_command[0]
+    if action not in available_pip_commands_with_packages + available_pip_commands_without_packages:
+        bot.reply_to(message, f'pip available commands are: {", ".join(available_pip_commands_with_packages + available_pip_commands_without_packages)}')
+        return
+
+    packages = ' '.join(raw_command[1:])
+    if any([operator in packages for operator in ['&&', '||', ';']]):
+        bot.reply_to(message, f'Oh you!')
+        return
+
+    if action in available_pip_commands_with_packages:
+        if action == 'uninstall':
+            output = subprocess.check_output(['docker', 'exec', container_name, 'pip', action, '-y', ] + packages.split()).decode('utf-8')
+        else:
+            output = subprocess.check_output(['docker', 'exec', container_name, 'pip', action, ] + packages.split()).decode('utf-8')
+        splitted_messages = [output[i:i+max_message_size] for i in range(0, len(output), max_message_size)]
+        for each in splitted_messages:
+            bot.reply_to(message, f'```{each}```', parse_mode='Markdown')
+        return
+
+    if action in available_pip_commands_without_packages:
+        output = subprocess.check_output(['docker', 'exec', container_name, 'pip', action]).decode('utf-8')
+        splitted_messages = [output[i:i+max_message_size] for i in range(0, len(output), max_message_size)]
+        for each in splitted_messages:
+            bot.reply_to(message, f'```{each}```', parse_mode='Markdown')
+        return
+
+
 @bot.message_handler(func=lambda m: True)
 def run_python_line(message):
     if message.from_user.id not in interpreters:

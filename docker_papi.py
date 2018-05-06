@@ -55,7 +55,7 @@ def start_interpreter(message):
     loader = threading.Thread(target=show_loader, args=(promt_message, interpreters, bot))
     loader.start()
 
-    container_name = f'{DOCKER_CONTAINER_NAME_PREFIX}{message.from_user.id}'
+    container_name = f'{DOCKER_CONTAINER_NAME_PREFIX}{message.chat.id}'
     try:
         container = client.containers.get(container_name)
         print(f'{container_name} - Container already exists')
@@ -80,7 +80,7 @@ def start_interpreter(message):
 @bot.message_handler(commands=['pip'])
 def pip_manage(message):
     max_message_size = 4096
-    container_name = f'{DOCKER_CONTAINER_NAME_PREFIX}{message.from_user.id}'
+    container_name = f'{DOCKER_CONTAINER_NAME_PREFIX}{message.chat.id}'
     available_pip_commands_with_packages = ['install', 'uninstall']
     available_pip_commands_without_packages = ['list']
     raw_command = message.text.split()[1:]
@@ -119,5 +119,9 @@ def run_python_line(message):
         bot.reply_to(message, 'Send /start first')
     else:
         interpreters[message.chat.id].add_command(message.text)
+        try:
+            bot.delete_message(message.chat.id, message.message_id)
+        except telebot.apihelper.ApiException:
+            pass
 
-bot.polling()
+bot.polling(none_stop=True, interval=0, timeout=20)

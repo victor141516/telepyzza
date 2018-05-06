@@ -67,13 +67,13 @@ def start_interpreter(message):
     container.stop()
 
     print(f'{container_name} - Creating interpreter')
-    interpreters[message.from_user.id] = Pyterpreted(f'docker start -ia {container_name}')
+    interpreters[message.chat.id] = Pyterpreted(f'docker start -ia {container_name}')
     print(f'{container_name} - Interpreted creater')
     print(f'{container_name} - Waiting for loader to stop')
     loader.join()
     print(f'{container_name} - Loader end')
     print(f'{container_name} - Begin interpreter')
-    t = threading.Thread(target=update_message, args=(promt_message, interpreters[message.from_user.id], bot))
+    t = threading.Thread(target=update_message, args=(promt_message, interpreters[message.chat.id], bot))
     t.start()
 
 
@@ -115,9 +115,9 @@ def pip_manage(message):
 
 @bot.message_handler(func=lambda m: True)
 def run_python_line(message):
-    if message.from_user.id not in interpreters:
+    if message.chat.id not in interpreters:
         bot.reply_to(message, 'Send /start first')
     else:
-        interpreters[message.from_user.id].add_command(message.text)
+        interpreters[message.chat.id].add_command(message.text)
 
 bot.polling()

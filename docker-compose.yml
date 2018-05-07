@@ -1,0 +1,13 @@
+version: '3'
+services:
+
+  docker_papi:
+    container_name: docker_papi
+    image: docker_papi
+    build:
+      context: .
+    environment:
+      - TG_TOKEN=XXXXXXXXXXXX
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./:/app

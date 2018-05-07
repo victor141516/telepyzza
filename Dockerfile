@@ -1,4 +1,4 @@
-FROM docker:dind
+FROM docker:latest
 
 RUN apk add --no-cache python3 && \
     python3 -m ensurepip && \
@@ -11,4 +11,4 @@ RUN apk add --no-cache python3 && \
 COPY . /app
 RUN pip install -r /app/requirements.txt
 
-CMD [ "sh", "-c", "/usr/local/bin/dockerd-entrypoint.sh & python3 /app/docker_papi.py" ]
+CMD [ "python3", "/app/docker_papi.py" ]

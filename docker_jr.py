@@ -29,6 +29,8 @@ class Pyterpreted(object):
             if self.running and len(self.command_queue) is not 0:
                 command = self.command_queue.pop()
                 print(f'Running command: {command}')
+                if '\n' in command:
+                    command += '\n'
                 self._runner.sendline(command)
                 self._runner.expect(self._expected_str)
                 raw_result = self._runner.before

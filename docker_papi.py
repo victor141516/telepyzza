@@ -118,7 +118,10 @@ def run_python_line(message):
     if message.chat.id not in interpreters:
         bot.reply_to(message, 'Send /start first')
     else:
-        interpreters[message.chat.id].add_command(message.text)
+        if interpreters[message.chat.id].add_command(message.text) is False:
+            bot.reply_to(message, f'Max {interpreters[message.chat.id].max_queued_commands} commands queued reached')
+            return
+
         try:
             bot.delete_message(message.chat.id, message.message_id)
         except telebot.apihelper.ApiException:

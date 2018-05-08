@@ -1,6 +1,8 @@
 import docker
 from docker_jr import Pyterpreted
+from apistar import App, Route, http
 import os
+import requests
 import subprocess
 import threading
 import telebot
@@ -8,6 +10,8 @@ import time
 
 
 TG_TOKEN = os.environ['TG_TOKEN']
+DOCKER_NETWORK = os.environ['DOCKER_NETWORK']
+WEBHOOK_URL = os.environ.get('WEBHOOK_URL', False)
 DOCKER_CONTAINER_NAME_PREFIX = 'docker_jr_'
 client = docker.from_env()
 bot = telebot.TeleBot(TG_TOKEN)
@@ -61,7 +65,7 @@ def start_interpreter(message):
         print(f'{container_name} - Container already exists')
     except docker.errors.NotFound:
         print(f'{container_name} - Container doesn\'t exists')
-        subprocess.run(['docker', 'run', '-dit', '--name', container_name, 'python:3-alpine', 'python'])
+        subprocess.run(['docker', 'run', '-dit', '--network', DOCKER_NETWORK, '--name', container_name, 'python:3-alpine', 'python'])
         container = client.containers.get(container_name)
         print(f'{container_name} - Container created')
     container.stop()
@@ -127,4 +131,30 @@ def run_python_line(message):
         except telebot.apihelper.ApiException:
             pass
 
-bot.polling(none_stop=True, interval=0, timeout=20)
+
+def route_to_jr(user_path, request: http.Request):
+    pieces = user_path.split('/')
+    chat_id = pieces[0]
+    container_name = f'{DOCKER_CONTAINER_NAME_PREFIX}{chat_id}'
+    path = f'/{"/".join(pieces[1:])}'
+    print(f'http://{container_name}{path}')
+    requests_response = requests.request(request.method, f'http://{container_name}{path}', headers=dict(request.headers), data=request.body)
+    return http.Response(requests_response.text, headers=requests_response.headers)
+
+
+def set_webhook():
+    webhook = bot.get_webhook_info()
+    bot.remove_webhook()
+    bot.set_webhook(url=WEBHOOK_URL + "/bot")
+    return '!'
+
+
+routes = [
+    Route('/', method='GET', handler=set_webhook),
+    Route('/u/{+user_path}', method='GET', handler=route_to_jr),
+]
+app = App(routes=routes)
+
+if WEBHOOK_URL is False:
+    bot.polling(none_stop=True, interval=0, timeout=20)
+    app.serve('0.0.0.0', 8000)

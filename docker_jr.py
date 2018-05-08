@@ -15,8 +15,8 @@ class Pyterpreted(object):
         self._runner = pexpect.spawnu(executable)
         self._expected_str = expected_str
         self._runner.expect(self._expected_str)
-        t = threading.Thread(target=self._run_next_command)
-        t.start()
+        self._runner_thread = threading.Thread(target=self._run_next_command)
+        self._runner_thread.start()
 
     def add_command(self, command):
         if len(self.command_queue) >= self.max_queued_commands:

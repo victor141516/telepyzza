@@ -1,3 +1,4 @@
+apistar==0.5.10
 appnope==0.1.0
 backcall==0.1.0
 certifi==2018.4.16
@@ -10,6 +11,8 @@ ipdb==0.11
 ipython==6.3.1
 ipython-genutils==0.2.0
 jedi==0.12.0
+Jinja2==2.10
+MarkupSafe==1.0
 parso==0.2.0
 pexpect==4.5.0
 pickleshare==0.7.4
@@ -24,3 +27,5 @@ traitlets==4.3.2
 urllib3==1.22
 wcwidth==0.1.7
 websocket-client==0.47.0
+Werkzeug==0.14.1
+whitenoise==3.3.1

@@ -6,8 +6,18 @@ services:
     image: docker_papi
     build:
       context: .
+    networks:
+      - telepyzza
+    ports:
+      - 8000:8000
     environment:
-      - TG_TOKEN=XXXXXXXXXXXX
+      - TG_TOKEN=XXXXXXXXXXXXXXXXXXXXX
+      - DOCKER_NETWORK=pylegram_telepyzza
+      - WEBHOOK_URL=https://domain.com
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./:/app
+
+networks:
+  telepyzza:
+    driver: bridge

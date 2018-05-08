@@ -149,8 +149,14 @@ def set_webhook():
     return '!'
 
 
+def get_message(request: http.Request):
+    bot.process_new_updates(
+        [telebot.types.Update.de_json(request.body.decode('utf-8'))])
+    return '!'
+
 routes = [
     Route('/', method='GET', handler=set_webhook),
+    Route('/bot', method='POST', handler=get_message),
     Route('/u/{+user_path}', method='GET', handler=route_to_jr),
 ]
 app = App(routes=routes)

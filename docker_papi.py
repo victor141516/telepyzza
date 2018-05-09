@@ -83,7 +83,7 @@ def start_interpreter(message):
 
 @bot.message_handler(commands=['id'])
 def get_id(message):
-    bot.reply_to(message, f'Your chat_id is `{message.chat.id}`', parse_mode='Markdown')
+    bot.reply_to(message, f'Your chat\_id is `{message.chat.id}`', parse_mode='Markdown')
 
 
 @bot.message_handler(commands=['url'])

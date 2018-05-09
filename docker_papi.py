@@ -81,6 +81,16 @@ def start_interpreter(message):
     t.start()
 
 
+@bot.message_handler(commands=['id'])
+def get_id(message):
+    bot.reply_to(message, f'Your chat_id is `{message.chat.id}`', parse_mode='Markdown')
+
+
+@bot.message_handler(commands=['url'])
+def get_id(message):
+    bot.reply_to(message, f'Your base URL is {WEBHOOK_URL}/u/{message.chat.id}')
+
+
 @bot.message_handler(commands=['pip'])
 def pip_manage(message):
     max_message_size = 4096

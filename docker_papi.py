@@ -172,5 +172,6 @@ routes = [
 app = App(routes=routes)
 
 if WEBHOOK_URL is False:
+    bot.remove_webhook()
     bot.polling(none_stop=True, interval=0, timeout=20)
     app.serve('0.0.0.0', 8000)

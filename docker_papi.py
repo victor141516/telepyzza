@@ -12,24 +12,46 @@ import time
 TG_TOKEN = os.environ['TG_TOKEN']
 DOCKER_NETWORK = os.environ['DOCKER_NETWORK']
 WEBHOOK_URL = os.environ.get('WEBHOOK_URL', False)
-DOCKER_CONTAINER_NAME_PREFIX = 'docker_jr_'
+DOCKER_CONTAINER_NAME_PREFIX = os.environ.get('DOCKER_CONTAINER_NAME_PREFIX', 'docker_jr_')
+MAX_TG_MSG_SIZE = os.environ.get('MAX_TG_MSG_SIZE', 4000)
 client = docker.from_env()
 bot = telebot.TeleBot(TG_TOKEN)
 interpreters = {}
 
 
 def update_message(promt_message, interpreter, bot):
-    output = interpreter.get_output()
+    def edit(m):
+        try:
+            return bot.edit_message_text(
+                f'```{m}```',
+                message_id=promt_message.message_id,
+                chat_id=promt_message.chat.id,
+                parse_mode='Markdown')
+        except Exception as e:
+            print('Error updating message\n@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@')
+            print(m)
+            print('@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@')
+            print(e)
+            print('@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n')
+
+    output = interpreter.output
+    seek_pos = 0
+    output.seek(seek_pos)
     message = ''
-    for each in output:
-        if each is None:
-            continue
-        message = f'{message}\n\n{each["result"]}'
-        bot.edit_message_text(
-            f'```{message}```',
-            message_id=promt_message.message_id,
-            chat_id=promt_message.chat.id,
-            parse_mode='Markdown')
+    while True:
+        time.sleep(0.5)
+        prev_message = message
+        output.seek(seek_pos)
+        message = output.read()
+        if message != prev_message:
+            edit(message[:MAX_TG_MSG_SIZE])
+            overflow_n = 0
+            while len(message) >= MAX_TG_MSG_SIZE:
+                overflow_n += 1
+                message = message[MAX_TG_MSG_SIZE:]
+                promt_message = bot.send_message(promt_message.chat.id, f'`{message[:MAX_TG_MSG_SIZE]}`', parse_mode='Markdown')
+            if overflow_n > 0:
+                seek_pos += MAX_TG_MSG_SIZE * overflow_n
 
 
 def show_loader(promt_message, interpreters, bot):
@@ -37,7 +59,7 @@ def show_loader(promt_message, interpreters, bot):
         for x in range(0, 3):
             if promt_message.chat.id in interpreters:
                 bot.edit_message_text(
-                    '`>>>`',
+                    f'`Done!`',
                     message_id=promt_message.message_id,
                     chat_id=promt_message.chat.id,
                     parse_mode='Markdown')
@@ -68,7 +90,6 @@ def start_interpreter(message):
         subprocess.run(['docker', 'run', '-dit', '--network', DOCKER_NETWORK, '--name', container_name, 'python:3-alpine', 'python'])
         container = client.containers.get(container_name)
         print(f'{container_name} - Container created')
-    container.stop()
 
     print(f'{container_name} - Creating interpreter')
     interpreters[message.chat.id] = Pyterpreted(f'docker start -ia {container_name}')
@@ -79,6 +100,7 @@ def start_interpreter(message):
     print(f'{container_name} - Begin interpreter')
     t = threading.Thread(target=update_message, args=(promt_message, interpreters[message.chat.id], bot))
     t.start()
+    interpreters[message.chat.id].add_command('\n')
 
 
 @bot.message_handler(commands=['id'])
@@ -88,12 +110,18 @@ def get_id(message):
 
 @bot.message_handler(commands=['url'])
 def get_id(message):
-    bot.reply_to(message, f'Your base URL is {WEBHOOK_URL}/u/{message.chat.id}')
+    if WEBHOOK_URL is False:
+        bot.reply_to(message, '/url only works when using webhook mode')
+    else:
+        bot.reply_to(message, f'Your base URL is {WEBHOOK_URL}/u/{message.chat.id}')
 
+@bot.message_handler(commands=['ctrlc'])
+def ctrlc(message):
+    interpreters[message.chat.id]._runner.send('\003')
 
 @bot.message_handler(commands=['pip'])
 def pip_manage(message):
-    max_message_size = 4096
+    max_message_size = MAX_TG_MSG_SIZE
     container_name = f'{DOCKER_CONTAINER_NAME_PREFIX}{message.chat.id}'
     available_pip_commands_with_packages = ['install', 'uninstall']
     available_pip_commands_without_packages = ['list']
@@ -132,7 +160,10 @@ def run_python_line(message):
     if message.chat.id not in interpreters:
         bot.reply_to(message, 'Send /start first')
     else:
-        if interpreters[message.chat.id].add_command(message.text) is False:
+        python_line = message.text
+        if '\n' in python_line:
+            python_line += '\n'
+        if interpreters[message.chat.id].add_command(python_line) is False:
             bot.reply_to(message, f'Max {interpreters[message.chat.id].max_queued_commands} commands queued reached')
             return
 

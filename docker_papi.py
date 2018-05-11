@@ -184,13 +184,18 @@ def run_python_line(message):
             pass
 
 
-def route_to_jr(user_path, request: http.Request):
+def route_to_jr(user_path, request: http.Request, query_params: http.QueryParams):
+    if len(query_params) > 0:
+        query_params_str = f'?{"&".join([f"{k}={query_params[k]}" for k in query_params.keys()])}'
+    else:
+        query_params = ''
+
     pieces = user_path.split('/')
     chat_id = pieces[0]
     container_name = f'{DOCKER_CONTAINER_NAME_PREFIX}{chat_id}'
     path = f'/{"/".join(pieces[1:])}'
     print(f'http://{container_name}{path}')
-    requests_response = requests.request(request.method, f'http://{container_name}{path}', headers=dict(request.headers), data=request.body)
+    requests_response = requests.request(request.method, f'http://{container_name}{path}{query_params_str}', headers=dict(request.headers), data=request.body)
     return http.Response(requests_response.text, headers=requests_response.headers)
 
 

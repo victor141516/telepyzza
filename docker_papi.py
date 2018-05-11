@@ -188,7 +188,7 @@ def route_to_jr(user_path, request: http.Request, query_params: http.QueryParams
     if len(query_params) > 0:
         query_params_str = f'?{"&".join([f"{k}={query_params[k]}" for k in query_params.keys()])}'
     else:
-        query_params = ''
+        query_params_str = ''
 
     pieces = user_path.split('/')
     chat_id = pieces[0]

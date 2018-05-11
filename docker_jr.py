@@ -16,5 +16,8 @@ class Pyterpreted(object):
         return self._runner.sendline(command)
 
     def _run_next_command(self):
-        while self._runner.expect('.+', timeout=None) is 0:
-            self.output.write(self._runner.after)
+        try:
+            while self._runner.expect('.+', timeout=None) is 0:
+                self.output.write(self._runner.after)
+        except pexpect.exceptions.EOF as e:
+            print('Container removed')

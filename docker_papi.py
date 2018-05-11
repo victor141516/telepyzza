@@ -119,6 +119,17 @@ def get_id(message):
 def ctrlc(message):
     interpreters[message.chat.id]._runner.send('\003')
 
+@bot.message_handler(commands=['rm'])
+def rm_f_container(message):
+    container_name = f'{DOCKER_CONTAINER_NAME_PREFIX}{message.chat.id}'
+    try:
+        del(interpreters[message.chat.id])
+    except KeyError:
+        bot.reply_to(message, 'Your ordered no pyzza yet')
+        return
+    output = subprocess.check_output(['docker', 'rm', '-f', container_name]).decode('utf-8')
+    bot.reply_to(message, 'Interpreter removed. Send /start to begin.')
+
 @bot.message_handler(commands=['pip'])
 def pip_manage(message):
     max_message_size = MAX_TG_MSG_SIZE

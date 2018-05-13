@@ -87,7 +87,7 @@ def start_interpreter(message):
         print(f'{container_name} - Container already exists')
     except docker.errors.NotFound:
         print(f'{container_name} - Container doesn\'t exists')
-        subprocess.run(['docker', 'run', '-dit', '--network', DOCKER_NETWORK, '--name', container_name, 'python:3-alpine', 'python'])
+        subprocess.run(['docker', 'run', '-dit', '-c128', '-m64m', '--network', DOCKER_NETWORK, '--name', container_name, 'python:3-alpine', 'python'])
         container = client.containers.get(container_name)
         print(f'{container_name} - Container created')
 

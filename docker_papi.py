@@ -119,6 +119,20 @@ def get_id(message):
     bot.reply_to(message, f'Your chat\_id is `{message.chat.id}`', parse_mode='Markdown')
 
 
+@bot.message_handler(commands=['log'])
+def get_interpreter_log(message):
+    container_name = f'{DOCKER_CONTAINER_NAME_PREFIX}{message.chat.id}'
+    o = interpreters[message.chat.id]['runner'].output
+    current_pos = o.tell()
+    o.seek(0)
+    setattr(o, 'name', 'log.txt')
+    bot.send_document(
+        message.chat.id,
+        o,
+        reply_to_message_id=message.message_id)
+    o.seek(current_pos)
+
+
 @bot.message_handler(commands=['url'])
 def get_id(message):
     if WEBHOOK_URL is False:

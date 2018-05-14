@@ -14,6 +14,7 @@ DOCKER_NETWORK = os.environ['DOCKER_NETWORK']
 WEBHOOK_URL = os.environ.get('WEBHOOK_URL', False)
 DOCKER_CONTAINER_NAME_PREFIX = os.environ.get('DOCKER_CONTAINER_NAME_PREFIX', 'docker_jr_')
 MAX_TG_MSG_SIZE = os.environ.get('MAX_TG_MSG_SIZE', 4000)
+MAX_TIME_WITHOUT_ACTIVITY = 600
 client = docker.from_env()
 bot = telebot.TeleBot(TG_TOKEN)
 interpreters = {}
@@ -34,17 +35,24 @@ def update_message(promt_message, interpreter, bot):
             print(e)
             print('@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n')
 
-    output = interpreter.output
+    output = interpreter['runner'].output
+    interpreter['last_activity_timestamp'] = time.time()
+    container_name = f'{DOCKER_CONTAINER_NAME_PREFIX}{promt_message.chat.id}'
     seek_pos = 0
     output.seek(seek_pos)
     message = ''
     while True:
         time.sleep(0.5)
+        if time.time() - interpreter['last_activity_timestamp'] > MAX_TIME_WITHOUT_ACTIVITY:
+            output = subprocess.check_output(['docker', 'rm', '-f', container_name]).decode('utf-8')
+            bot.send_message(promt_message.chat.id, 'Your interpreter has been stopped due to inactivity. You can send /start to run it again.')
+            return
         prev_message = message
         output.seek(seek_pos)
         message = output.read()
         if message != prev_message:
             edit(message[:MAX_TG_MSG_SIZE])
+            interpreter['last_activity_timestamp'] = time.time()
             overflow_n = 0
             while len(message) >= MAX_TG_MSG_SIZE:
                 overflow_n += 1
@@ -92,7 +100,10 @@ def start_interpreter(message):
         print(f'{container_name} - Container created')
 
     print(f'{container_name} - Creating interpreter')
-    interpreters[message.chat.id] = Pyterpreted(f'docker start -ia {container_name}')
+    interpreters[message.chat.id] = {
+        'runner': Pyterpreted(f'docker start -ia {container_name}'),
+        'last_activity_timestamp': None
+        }
     print(f'{container_name} - Interpreted creater')
     print(f'{container_name} - Waiting for loader to stop')
     loader.join()
@@ -100,7 +111,7 @@ def start_interpreter(message):
     print(f'{container_name} - Begin interpreter')
     t = threading.Thread(target=update_message, args=(promt_message, interpreters[message.chat.id], bot))
     t.start()
-    interpreters[message.chat.id].add_command('\n')
+    interpreters[message.chat.id]['runner'].add_command('\n')
 
 
 @bot.message_handler(commands=['id'])
@@ -117,7 +128,7 @@ def get_id(message):
 
 @bot.message_handler(commands=['ctrlc'])
 def ctrlc(message):
-    interpreters[message.chat.id]._runner.send('\003')
+    interpreters[message.chat.id]['runner']._runner.send('\003')
 
 @bot.message_handler(commands=['rm'])
 def rm_f_container(message):
@@ -174,8 +185,8 @@ def run_python_line(message):
         python_line = message.text
         if '\n' in python_line:
             python_line += '\n'
-        if interpreters[message.chat.id].add_command(python_line) is False:
-            bot.reply_to(message, f'Max {interpreters[message.chat.id].max_queued_commands} commands queued reached')
+        if interpreters[message.chat.id]['runner'].add_command(python_line) is False:
+            bot.reply_to(message, f'Max {interpreters[message.chat.id]["runner"].max_queued_commands} commands queued reached')
             return
 
         try:

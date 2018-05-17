@@ -1,12 +1,16 @@
+from apistar import App, Route, http
+import base64
 import docker
 from docker_jr import Pyterpreted
-from apistar import App, Route, http
+from io import BytesIO
 import os
 import requests
 import subprocess
 import threading
 import telebot
 import time
+from uuid import uuid4
+from zipfile import ZipFile, BadZipFile
 
 
 TG_TOKEN = os.environ['TG_TOKEN']
@@ -15,16 +19,21 @@ WEBHOOK_URL = os.environ.get('WEBHOOK_URL', False)
 DOCKER_CONTAINER_NAME_PREFIX = os.environ.get('DOCKER_CONTAINER_NAME_PREFIX', 'docker_jr_')
 MAX_TG_MSG_SIZE = os.environ.get('MAX_TG_MSG_SIZE', 4000)
 MAX_TIME_WITHOUT_ACTIVITY = 600
+ENTRY_PY_FILE_NAMES = ['entry.py', 'main.py']
 client = docker.from_env()
 bot = telebot.TeleBot(TG_TOKEN)
 interpreters = {}
 
 
-def update_message(promt_message, interpreter, bot):
+def update_message(promt_message, interpreters, bot):
     def edit(m):
         try:
+            if m.endswith('\r\n'):
+                m = m[:-2]
+            elif m.endswith('\n'):
+                m = m[:-1]
             return bot.edit_message_text(
-                f'```{m}```',
+                f'```\n{m}```',
                 message_id=promt_message.message_id,
                 chat_id=promt_message.chat.id,
                 parse_mode='Markdown')
@@ -34,16 +43,16 @@ def update_message(promt_message, interpreter, bot):
             print('@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@')
             print(e)
             print('@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n')
+            return -1
 
-    output = interpreter['runner'].output
-    interpreter['last_activity_timestamp'] = time.time()
+    output = interpreters[promt_message.chat.id]['runner'].output
+    interpreters[promt_message.chat.id]['last_activity_timestamp'] = time.time()
     container_name = f'{DOCKER_CONTAINER_NAME_PREFIX}{promt_message.chat.id}'
     seek_pos = 0
-    output.seek(seek_pos)
     message = ''
     while True:
         time.sleep(0.5)
-        if time.time() - interpreter['last_activity_timestamp'] > MAX_TIME_WITHOUT_ACTIVITY:
+        if time.time() - interpreters[promt_message.chat.id]['last_activity_timestamp'] > MAX_TIME_WITHOUT_ACTIVITY:
             output = subprocess.check_output(['docker', 'rm', '-f', container_name]).decode('utf-8')
             bot.send_message(promt_message.chat.id, 'Your interpreter has been stopped due to inactivity. You can send /start to run it again.')
             return
@@ -51,8 +60,9 @@ def update_message(promt_message, interpreter, bot):
         output.seek(seek_pos)
         message = output.read()
         if message != prev_message:
-            edit(message[:MAX_TG_MSG_SIZE])
-            interpreter['last_activity_timestamp'] = time.time()
+            if edit(message[:MAX_TG_MSG_SIZE]) is -1:
+                return
+            interpreters[promt_message.chat.id]['last_activity_timestamp'] = time.time()
             overflow_n = 0
             while len(message) >= MAX_TG_MSG_SIZE:
                 overflow_n += 1
@@ -83,6 +93,57 @@ def show_loader(promt_message, interpreters, bot):
                 pass
 
 
+@bot.message_handler(content_types=['document'])
+def receive_file(message):
+    dir_name = str(uuid4())
+    container_name = f'{DOCKER_CONTAINER_NAME_PREFIX}{message.chat.id}'
+    file_info = bot.get_file(message.document.file_id)
+    if not (file_info.file_path.endswith('.zip') or file_info.file_path.endswith('.py')):
+        bot.reply_to(message, 'You can only send .py or .zip files')
+        return
+
+    r_file = requests.get('https://api.telegram.org/file/bot{0}/{1}'.format(TG_TOKEN, file_info.file_path))
+    if file_info.file_path.endswith('.py'):
+        entry_file = file_info.file_path.split('/')[-1]
+        subprocess.check_output(['docker', 'exec', container_name, 'mkdir', '-p', f'/app/{dir_name}'])
+        encoded_py = base64.b64encode(r_file.content).decode("utf-8")
+        subprocess.check_output(['docker', 'exec', container_name, 'sh', '-c', f'echo "{encoded_py}" | base64 -d > /app/{dir_name}/{entry_file}'])
+    else:
+        try:
+            z_file = ZipFile(BytesIO(r_file.content))
+        except BadZipFile:
+            bot.reply_to(message, 'This zip file is corrupted')
+            return
+        encoded_zip = base64.b64encode(r_file.content).decode("utf-8")
+        zip_file_name = file_info.file_path.split('/')[-1]
+        subprocess.check_output(['docker', 'exec', container_name, 'mkdir', '-p', f'/app/{dir_name}'])
+        subprocess.check_output(['docker', 'exec', container_name, 'sh', '-c', f'echo "{encoded_zip}" | base64 -d > /app/{dir_name}/{zip_file_name}'])
+        subprocess.check_output(['docker', 'exec', container_name, 'sh', '-c', f'cd /app/{dir_name} && unzip -o {zip_file_name} && rm {zip_file_name}'])
+        files = subprocess.check_output(['docker', 'exec', container_name, 'ls', f'/app/{dir_name}']).decode('utf-8').split('\n')[:-1]
+        entry_file = None
+        for each in ENTRY_PY_FILE_NAMES:
+            if each in files:
+                entry_file = each
+                break
+
+        if entry_file is None:
+            bot.reply_to(message, f'You have to upload a zip with a .py file on its root with one of the following names: {ENTRY_PY_FILE_NAMES}')
+            return
+
+    interpreters[message.chat.id] = {
+        'runner': Pyterpreted(f'docker exec -it -w /app/{dir_name} {container_name} python {entry_file}'),
+        'runner_paused_for_file_script': interpreters[message.chat.id]['runner'],
+        'last_activity_timestamp': time.time()
+        }
+    promt_message = bot.send_message(message.chat.id, 'Run...', parse_mode='Markdown')
+
+    update_message(promt_message, interpreters, bot)
+    interpreters[message.chat.id] = {
+        'runner': interpreters[message.chat.id]['runner_paused_for_file_script'],
+        'last_activity_timestamp': time.time()
+        }
+
+
 @bot.message_handler(commands=['start'])
 def start_interpreter(message):
     promt_message = bot.send_message(message.chat.id, '`.`', parse_mode='Markdown')
@@ -102,14 +163,14 @@ def start_interpreter(message):
     print(f'{container_name} - Creating interpreter')
     interpreters[message.chat.id] = {
         'runner': Pyterpreted(f'docker start -ia {container_name}'),
-        'last_activity_timestamp': None
+        'last_activity_timestamp': time.time()
         }
     print(f'{container_name} - Interpreted creater')
     print(f'{container_name} - Waiting for loader to stop')
     loader.join()
     print(f'{container_name} - Loader end')
     print(f'{container_name} - Begin interpreter')
-    t = threading.Thread(target=update_message, args=(promt_message, interpreters[message.chat.id], bot))
+    t = threading.Thread(target=update_message, args=(promt_message, interpreters, bot))
     t.start()
     interpreters[message.chat.id]['runner'].add_command('\n')
 

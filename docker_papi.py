@@ -138,7 +138,7 @@ def get_id(message):
     if WEBHOOK_URL is False:
         bot.reply_to(message, '/url only works when using webhook mode')
     else:
-        bot.reply_to(message, f'Your base URL is {WEBHOOK_URL}/u/{message.chat.id}')
+        bot.reply_to(message, f'Your base URL is {WEBHOOK_URL}/u/{message.chat.id}. Port 80 is the only one available for now. However you will be redirected to port 443 with SSL for each connection.')
 
 @bot.message_handler(commands=['ctrlc'])
 def ctrlc(message):

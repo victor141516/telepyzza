@@ -6,7 +6,7 @@ docker==3.3.0
 docker-pycreds==0.2.3
 gunicorn==19.8.1
 idna==2.6
-Jinja2==2.10
+Jinja2==2.11.3
 MarkupSafe==1.0
 pexpect==4.5.0
 ptyprocess==0.5.2

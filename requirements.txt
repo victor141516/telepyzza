@@ -11,7 +11,7 @@ MarkupSafe==1.0
 pexpect==4.5.0
 ptyprocess==0.5.2
 pyTelegramBotAPI==3.6.3
-PyYAML==3.12
+PyYAML==5.4
 requests==2.18.4
 six==1.11.0
 urllib3==1.22
